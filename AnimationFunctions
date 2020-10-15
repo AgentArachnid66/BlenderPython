@@ -1,0 +1,77 @@
+import bpy
+from enum import Enum
+
+# So I can choose which type of FCurve to changed
+class TransformType(Enum):
+    Location = "location"
+    Rotation = "rotation_quaternion"
+    Scale = "scale"
+
+# Gets a specific FCurve
+def GetFCurve(bone, transformType ,axis):
+# Gets a list of fcurves of the selected action
+    obj = bpy.context.object
+    curves = obj.animation_data.action.fcurves.values()
+    for fcurve in curves:
+        # Checks if the fcurve belongs to a bone
+        if fcurve.data_path.startswith("pose.bones"):
+            try: 
+            # Splits up the data path so I can easily make comparisons to the parameters
+                tmp = fcurve.data_path.split("[", maxsplit=1)[1].split("]", maxsplit=1)
+                bone_name = tmp[0][1:-1]
+                keyframe_type = tmp[1][1:]
+                
+                # Deselects all bones so only the one specified will be altered as a fail safe
+                fcurve.select = False
+
+# Massive if statement making sure I'm getting the right fcurve
+                if((bone_name == bone) and (keyframe_type == transformType.value) and (fcurve.array_index == GetRotationIndex(axis))):
+                    activeCurve = fcurve
+                    
+                    
+                    
+            except IndexError:
+                continue
+    # If the active Curve variable exists then return it
+    if(activeCurve):
+        return activeCurve
+            
+    
+# Basic dict return function so I can easily convert a human readable string into computer readable ints
+def GetRotationIndex(axis):
+    dict = {
+    "W": 0,
+    "X": 1,
+    "Y": 2,
+    "Z": 3
+    }
+    
+    return dict.get(axis, "Invalid")
+
+# Gets a range of the selected fcurve and clamps the values
+def CleanupTransform(bone, type ,axis, start_frame, end_frame, min, max):
+    activeCurve = GetFCurve(bone,type, axis)
+    if(activeCurve):
+    # Allows the fcurve to be edited
+        activeCurve.select = True
+       
+        activeCurve.hide = False
+        # Returns a list of the key frames
+        keyframes = activeCurve.keyframe_points.values()
+        
+        for frame in keyframes:
+        # Checks if the keyframe is within the range specified in the parameters
+            if ((frame.co[0] > start_frame) and (frame.co[0] < end_frame)):
+            
+            # Allows the keyframe to be edited
+                frame.select_control_point = True
+                # Clamps it to the minimum
+                if(frame.co[1] < min):
+                    frame.co[1] = min
+                # Clamps it to the max
+                elif(frame.co[1] > max):
+                    frame.co[1] = max
+            # Deselects the keyframe
+            frame.select_control_point = False
+    
+CleanupTransform("LeftForeArm", TransformType.Rotation, "Z", 1, 10, -1, 0)
