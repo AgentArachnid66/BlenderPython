@@ -1,12 +1,13 @@
 import bpy
 from enum import Enum
 
+# Enum for the transform type 
 class TransformType(Enum):
     Location = "location"
     Rotation = "rotation_quaternion"
     Scale = "scale"
 
-
+# Gets as defined FCurve 
 def GetFCurve(bone, transformType ,axis):
     obj = bpy.context.object
     curves = obj.animation_data.action.fcurves.values()
@@ -18,19 +19,22 @@ def GetFCurve(bone, transformType ,axis):
                 bone_name = tmp[0][1:-1]
                 keyframe_type = tmp[1][1:]
                 
-                fcurve.select = False
-
-
+                fcurve.select = False                
                 if((bone_name == bone) and (keyframe_type == transformType.value) and (fcurve.array_index == GetRotationIndex(axis))):
                     activeCurve = fcurve
-                    
-                    
-                    
+                    break
             except IndexError:
                 continue
-    if(activeCurve):
-        return activeCurve
             
+    try:
+        obj.pose.bones[bone].bone.select = True
+        return activeCurve
+    
+    except:
+        return None
+
+
+
     
 def GetRotationIndex(axis):
     dict = {
@@ -40,9 +44,15 @@ def GetRotationIndex(axis):
     "Z": 3
     }
     
-    return dict.get(axis, "Invalid")
+    # If the axis is the literal axis than it'll access the dictonary. If it's not then it's assumed to be the 
+    # the value. 
+    
+    return dict.get(axis, axis)
+
+
 
 def CleanupTransform(bone, type ,axis, start_frame, end_frame, min, max):
+
     activeCurve = GetFCurve(bone,type, axis)
     if(activeCurve):
         activeCurve.select = True
@@ -56,12 +66,9 @@ def CleanupTransform(bone, type ,axis, start_frame, end_frame, min, max):
                     frame.co[1] = min
                 elif(frame.co[1] > max):
                     frame.co[1] = max
-
-    
-print(TransformType.Location.value)
-
-CleanupTransform("LeftForeArm", TransformType.Rotation, "Z", 1, 10, -1, 0)
-
+                        
+                        
+                        
 def TranslateKeyframes(bone, type, axis, start_frame, end_frame, delta_x, delta_y):
     activeCurve = GetFCurve(bone,type, axis)
     if(activeCurve):
@@ -75,5 +82,93 @@ def TranslateKeyframes(bone, type, axis, start_frame, end_frame, delta_x, delta_
                 
                 frame.co[0] += delta_x
                 frame.co[1] += delta_y
+                
+                
+                
+def GetLinearFrames(bone, type, axis, start_frame, end_frame):
+    activeCurve = GetFCurve(bone, type, axis)
+    
+    if(activeCurve):
+        activeCurve.select = True
+        activeCurve.hide = False
+        
+        for frame in activeCurve.keyframe_points.values():
+            if((frame.co[0] > start_frame) and (frame.co[0] < end_frame)):
+                if (frame.interpolation == "LINEAR"):
+                    frame.select_control_point = True
+                    
+                    
+
+def GetBoneLinearFrames(bone, type, start_frame, end_frame):
+    for i in range(4):
+        GetLinearFrames(bone, type, i, start_frame, end_frame)
+
+def GetAllBoneLinearFrames(bone, start_frame, end_frame):
+    for transform in TransformType:
+        GetBoneLinearFrames(bone, transform, start_frame, end_frame)
+
+
+def GetBodyLinearFrames(type, start_frame, end_frame):
+    obj = bpy.context.object
+    for bone in obj.data.bones:
+        GetBoneLinearFrames(str(bone.name), type, start_frame, end_frame)
+        print(bone.name)
+
    
-TranslateKeyframes("LeftForeArm", TransformType.Rotation, "Z", 70, 100, 0, 0)
+def GetAllBodyLinearFrames(start_frame, end_frame):
+    for transform in TransformType:
+        GetBodyLinearFrames(transform, start_frame, end_frame)
+
+def SelectInbetween(lowest, highest):
+    bpy.context.area.type = 'GRAPH_EDITOR'
+    selectedCurves = bpy.context.selected_editable_fcurves
+    
+    for curve in selectedCurves:
+        for frame in curve.keyframe_points.values():
+            if(frame.co[0] > lowest and frame.co[0] < highest):
+                frame.select_control_point = True
+        
+    bpy.context.area.type = 'TEXT_EDITOR'
+    
+def SelectInbetween():
+    bpy.context.area.type = 'GRAPH_EDITOR'
+    selectedCurves = bpy.context.selected_editable_fcurves
+    
+    active = bpy.context.active_editable_fcurve
+    
+    lowest = active.keyframe_points.values()[-1].co[0]
+    highest = active.keyframe_points.values()[0].co[0]
+    for curve in selectedCurves:
+        for frame in curve.keyframe_points.values():
+            if(frame.select_control_point == True):
+                if (frame.co[0] > highest):
+                    highest = frame.co[0]
+                    print('Highest: ' +str(highest))
+                elif (frame.co[0] < lowest):
+                    lowest = frame.co[0]
+                    print('Lowest: ' +str(lowest))
+    print(highest, lowest)
+    
+    for curve in selectedCurves:
+        for frame in curve.keyframe_points.values():
+            if(frame.co[0] > lowest and frame.co[0] < highest):
+                frame.select_control_point = True
+                
+    
+def ConvertToSamples(fcurve):
+    if not(fcurve.range()[1] <= fcurve.range()[0]):
+        fcurve.convert_to_samples(2, fcurve.range()[1])
+        fcurve.convert_to_keyframes(2, fcurve.range()[1])
+        
+
+def ConvertBoneToSamples(bone, type):
+    for i in range(4):
+        activeCurve = GetFCurve(bone, type, i)
+        if(activeCurve):
+            ConvertToSamples(activeCurve)
+        
+def ConvertBodyToSamples(type):
+    obj = bpy.context.object
+    for bone in obj.data.bones:
+        ConvertBoneToSamples(bone.name, type)
+        print(bone.name)
