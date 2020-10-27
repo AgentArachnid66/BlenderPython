@@ -119,7 +119,7 @@ def GetAllBodyLinearFrames(start_frame, end_frame):
     for transform in TransformType:
         GetBodyLinearFrames(transform, start_frame, end_frame)
 
-def SelectInbetween(lowest, highest):
+def SelectInbetweenDefined(lowest, highest):
     bpy.context.area.type = 'GRAPH_EDITOR'
     selectedCurves = bpy.context.selected_editable_fcurves
     
@@ -130,29 +130,40 @@ def SelectInbetween(lowest, highest):
         
     bpy.context.area.type = 'TEXT_EDITOR'
     
+        
 def SelectInbetween():
     bpy.context.area.type = 'GRAPH_EDITOR'
     selectedCurves = bpy.context.selected_editable_fcurves
     
     active = bpy.context.active_editable_fcurve
+    if(active):
+        lowest = active.keyframe_points.values()[-1].co[0]
+        highest = active.keyframe_points.values()[0].co[0]
+    else:
+        lowest = selectedCurves[0].keyframes_points.values()[-1].co[0]
+        highest = selectedCurves[0].keyframes_points.values()[0].co[0]
+        
+    print('Lowest and highest: ' +str(lowest) +', ' +str(highest))    
     
-    lowest = active.keyframe_points.values()[-1].co[0]
-    highest = active.keyframe_points.values()[0].co[0]
     for curve in selectedCurves:
         for frame in curve.keyframe_points.values():
             if(frame.select_control_point == True):
+                print(frame.co)
+                if (frame.co[0] < lowest):
+                    lowest = frame.co[0]
+                    print('Lowest: ' +str(lowest))
+                    
                 if (frame.co[0] > highest):
                     highest = frame.co[0]
                     print('Highest: ' +str(highest))
-                elif (frame.co[0] < lowest):
-                    lowest = frame.co[0]
-                    print('Lowest: ' +str(lowest))
-    print(highest, lowest)
-    
+
+
     for curve in selectedCurves:
         for frame in curve.keyframe_points.values():
             if(frame.co[0] > lowest and frame.co[0] < highest):
                 frame.select_control_point = True
+    
+    bpy.context.area.type = 'TEXT_EDITOR'
                 
     
 def ConvertToSamples(fcurve):
@@ -172,3 +183,28 @@ def ConvertBodyToSamples(type):
     for bone in obj.data.bones:
         ConvertBoneToSamples(bone.name, type)
         print(bone.name)
+
+def SelectFrameKey(frame, fcurve, select=True):
+    for keyframe in fcurve.keyframe_points.values():
+        if(select):
+            if(keyframe.co[0] == frame):
+                keyframe.select_control_point = select
+            else:
+                keyframe.select_control_point = not select
+        else:
+            if(keyframe.co[0] == frame):
+                print('Deselect')
+                keyframe.select_control_point = select
+            
+
+def SelectBoneFrameKey(bone,type, frame, select=True):
+    for i in range(4):
+        activeCurve = GetFCurve(bone, type, i)
+        if(activeCurve):
+            SelectFrameKey(frame, activeCurve, select)
+
+def SelectBodyFrameKey(frame, type, select=True):
+    obj = bpy.context.object
+    for bone in obj.data.bones:
+        SelectBoneFrameKey(bone.name,type, frame, select)
+        
